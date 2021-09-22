@@ -52,8 +52,7 @@ const deleteMovie = (req, res, next) => {
     .then((movie) => {
       if (!movie) {
         next(new NotFoundError('Фильм не найден'));
-      }
-      else if (movie.owner._id.toString() === owner) {
+      } else if (movie.owner._id.toString() === owner) {
         movie.remove().then(() => {
           res.status(200).send(movie);
         })

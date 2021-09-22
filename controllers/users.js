@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
 const { NODE_ENV, JWT_SECRET } = process.env;
 const User = require('../models/user');
 const NotFoundError = require('../errors/NotFoundError');
@@ -66,9 +67,9 @@ const createUser = (req, res, next) => {
         next(new ServerError('Ошибка сервера'));
       });
   })
-  .catch(() => {
-    next(new ServerError('Ошибка сервера'));
-  });
+    .catch(() => {
+      next(new ServerError('Ошибка сервера'));
+    });
 };
 
 const login = (req, res, next) => {
@@ -82,7 +83,7 @@ const login = (req, res, next) => {
         .then((mathed) => {
           if (!mathed) {
             next(new Unauthorized('Некорректный email или пароль.'));
-          } else{
+          } else {
             return user;
           }
         });
