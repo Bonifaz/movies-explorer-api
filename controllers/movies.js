@@ -19,7 +19,6 @@ const createMovie = (req, res, next) => {
     country, director, duration, year, description,
     image, trailer, nameRU, nameEN, thumbnail, movieId,
   } = req.body;
-  const owner = req.user._id;
   Movie.create({
     country,
     director,
@@ -32,8 +31,9 @@ const createMovie = (req, res, next) => {
     nameEN,
     thumbnail,
     movieId,
-    owner,
+    owner: req.user._id,
   })
+
     .then((movie) => {
       res.status(200).send(movie);
     })
@@ -41,6 +41,7 @@ const createMovie = (req, res, next) => {
       if (err.name === 'ValidationError') {
         next(new BadRequest('Некорректно внесены данные.'));
       }
+
       next(new ServerError('Ошибка сервера'));
     });
 };
@@ -51,11 +52,13 @@ const deleteMovie = (req, res, next) => {
     .then((movie) => {
       if (!movie) {
         next(new NotFoundError('Фильм не найден'));
-      } else if (String(movie.owner) === owner) {
+      }
+      else if (movie.owner._id.toString() === owner) {
         movie.remove().then(() => {
           res.status(200).send(movie);
         })
-          .catch(() => {
+          .catch((err) => {
+            console.log(err);
             next(new ServerError('Ошибка сервера'));
           });
       } else {
@@ -63,8 +66,9 @@ const deleteMovie = (req, res, next) => {
       }
     })
     .catch((err) => {
+      console.log(err);
       if (err.name === 'CastError') {
-        next(new BadRequest('Некорректно внесены данные.'));
+        next(new BadRequest('Некорректно внесены данные'));
       } else {
         next(new ServerError('Ошибка сервера'));
       }

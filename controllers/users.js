@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { NODE_ENV, JWT_SECRET } = process.env;
 const User = require('../models/user');
 const NotFoundError = require('../errors/NotFoundError');
 const BadRequest = require('../errors/BadRequest');
@@ -42,15 +43,12 @@ const createUser = (req, res, next) => {
     name, email, password,
   } = req.body;
   User.findOne({ email }).then((user) => {
-    if (user) {
-      next(new Conflict('Пользователь с таким email существует'));
-    }
     bcrypt.hash(password, 10)
       .then((hash) => {
         User.create({
           name, email, password: hash,
         })
-          .then(() => {
+          .then((user) => {
             res.status(200).send({
               _id: user._id,
               name: user.name,
@@ -61,12 +59,15 @@ const createUser = (req, res, next) => {
             if (err.name === 'ValidationError') {
               next(new BadRequest('Некорректно переданы данные'));
             }
-            next(new ServerError('Ошибка сервера'));
+            next(new Conflict('Пользователь с таким email существует'));
           });
       })
       .catch(() => {
         next(new ServerError('Ошибка сервера'));
       });
+  })
+  .catch(() => {
+    next(new ServerError('Ошибка сервера'));
   });
 };
 
@@ -81,12 +82,13 @@ const login = (req, res, next) => {
         .then((mathed) => {
           if (!mathed) {
             next(new Unauthorized('Некорректный email или пароль.'));
+          } else{
+            return user;
           }
-          return user;
         });
     })
     .then((user) => {
-      const token = jwt.sign({ _id: user._id }, 'secret-key', { expiresIn: '7d' });
+      const token = jwt.sign({ _id: user._id }, NODE_ENV === 'production' ? JWT_SECRET : 'puding', { expiresIn: '7d' });
       return res
         .status(201)
         .cookie('jwt', token, {
@@ -98,9 +100,6 @@ const login = (req, res, next) => {
         .send({ message: 'Авторизация пройдена!', token });
     })
     .catch((err) => {
-      if (err.message === 'IncorrectEmail') {
-        next(new Unauthorized('Некорректный email или пароль.'));
-      }
       next(new ServerError('Ошибка сервера'));
     });
 };
