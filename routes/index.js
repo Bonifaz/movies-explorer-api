@@ -1,8 +1,9 @@
 const router = require('express').Router();
-const { celebrate, Joi, errors } = require('celebrate');
+const { celebrate, Joi } = require('celebrate');
+const auth = require('../middlewares/auth');
 const userRouter = require('./users');
 const movieRouter = require('./movies');
-const auth = require('../middlewares/auth');
+const NotFoundError = require('../errors/NotFoundError');
 const { createUser, login } = require('../controllers/users');
 
 router.post('/signin', celebrate({
@@ -23,7 +24,10 @@ router.post('/signup', celebrate({
 createUser);
 
 router.use(auth);
-router.use('/', userRouter);
 router.use('/', movieRouter);
+router.use('/', userRouter);
+router.use('*', (req, res, next) => {
+  next(new NotFoundError('Ресурс не найден'));
+});
 
 module.exports = router;

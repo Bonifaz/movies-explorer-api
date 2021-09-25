@@ -1,75 +1,71 @@
 const Movie = require('../models/movie');
-const NotFoundError = require('../errors/NotFoundError');
 const BadRequest = require('../errors/BadRequest');
+const NotFoundError = require('../errors/NotFoundError');
 const ServerError = require('../errors/ServerError');
 const Forbidden = require('../errors/Forbidden');
 
 const getMovies = (req, res, next) => {
-  const userId = req.user._id;
-  Movie.find({ owner: userId }).then((movies) => {
-    res.status(200).send(movies);
-  })
-    .catch(() => {
-      next(new ServerError('Ошибка сервера'));
-    });
+  Movie.find({ owner: req.user.payload._id }).then((movies) => res.status(200).send(movies))
+    .catch(next);
 };
 
+// Функция создания фильма
 const createMovie = (req, res, next) => {
-  const {
-    country, director, duration, year, description,
-    image, trailer, nameRU, nameEN, thumbnail, movieId,
-  } = req.body;
+  const data = req.body;
   Movie.create({
-    country,
-    director,
-    duration,
-    year,
-    description,
-    image,
-    trailer,
-    nameRU,
-    nameEN,
-    thumbnail,
-    movieId,
-    owner: req.user._id,
+    country: data.country,
+    director: data.director,
+    duration: data.duration,
+    year: data.year,
+    description: data.description,
+    image: data.image,
+    trailer: data.trailer,
+    nameRU: data.nameRU,
+    nameEN: data.nameEN,
+    thumbnail: data.thumbnail,
+    movieId: data.movieId,
+    owner: req.user.payload._id,
   })
-
     .then((movie) => {
+      console.log(movie.owner);
       res.status(200).send(movie);
     })
     .catch((err) => {
       if (err.name === 'ValidationError') {
-        next(new BadRequest('Некорректно внесены данные.'));
+        next(new BadRequest('Данные введены неверно'));
+      } else if (err.code === 11000) {
+        const error = new Error('Нельзя добавить уже существующий фильм');
+        error.statusCode = 409;
+        next(error);
+      } else {
+        next(new ServerError('Ошибка на сервере'));
       }
-
-      next(new ServerError('Ошибка сервера'));
     });
 };
 
 const deleteMovie = (req, res, next) => {
-  const owner = req.user._id;
-  Movie.findById(req.params.movieId)
+  const owner = req.user.payload._id;
+  Movie.findById({ _id: req.params.movieId })
+    .orFail(() => {
+      throw new NotFoundError('Фильм не найден');
+    })
     .then((movie) => {
-      if (!movie) {
-        next(new NotFoundError('Фильм не найден'));
-      } else if (movie.owner._id.toString() === owner) {
-        movie.remove().then(() => {
-          res.status(200).send(movie);
-        })
-          .catch((err) => {
-            console.log(err);
-            next(new ServerError('Ошибка сервера'));
-          });
-      } else {
+      if (movie.owner._id.toString() !== owner) {
         next(new Forbidden('Нельзя удалять чужие фильмы'));
+      } else {
+        movie.remove().then(() => {
+          res.status(200).send(movie)
+            .catch(() => {
+              next(new ServerError('Ошибка на сервере'));
+            });
+        });
       }
     })
     .catch((err) => {
-      console.log(err);
       if (err.name === 'CastError') {
-        next(new BadRequest('Некорректно внесены данные'));
+        next(new BadRequest('Данные введены неверно'));
       } else {
-        next(new ServerError('Ошибка сервера'));
+        next(new ServerError('Ошибка на сервере'));
       }
     });
 };

@@ -1,110 +1,88 @@
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-
-const { NODE_ENV, JWT_SECRET } = process.env;
 const User = require('../models/user');
-const NotFoundError = require('../errors/NotFoundError');
 const BadRequest = require('../errors/BadRequest');
+const NotFoundError = require('../errors/NotFoundError');
 const Unauthorized = require('../errors/Unauthorized');
 const Conflict = require('../errors/Conflict');
-const ServerError = require('../errors/ServerError');
+const { generateToken } = require('../utils/jwt');
 
-const getUsersMe = (req, res, next) => {
-  User.findById(req.user._id)
-    .then((user) => { res.status(200).send(user); })
-    .catch((err) => {
-      if (err.name === 'CastError') {
-        next(new Unauthorized('Неправильный логин или пароль.'));
-      }
-      next(new ServerError('Ошибка сервера'));
-    });
+// Информация о себе
+const getUser = (req, res, next) => {
+  User.findById(req.user.payload._id)
+    .orFail(() => {
+      throw new NotFoundError('Пользователь не найден');
+    })
+    .then((user) => {
+      res.status(200).send({
+        name: user.name,
+        email: user.email,
+      });
+    })
+    .catch(next);
 };
 
-const updateUser = (req, res, next) => {
-  const { name, email } = req.body;
-  User.findByIdAndUpdate(req.user._id, { name, email }, { new: true, runValidators: true })
+// Функция создания пользователя
+const createUser = (req, res, next) => {
+  const data = req.body;
+  if (!data.password) {
+    throw new BadRequest('Пароль не введен');
+  }
+  bcrypt.hash(req.body.password, 10)
+    .then((hash) => User.create({
+      email: data.email,
+      password: hash,
+      name: data.name,
+    }))
     .then((user) => {
-      if (user === null) {
-        next(new NotFoundError('Данные не найдены'));
-      }
-
-      return res.status(200).send(user);
+      res.status(201).send({
+        email: user.email,
+        name: user.name,
+      });
     })
     .catch((err) => {
-      if (err.name === 'ValidationError' || err.name === 'CastError') {
-        next(new BadRequest('Некоректные данные или формат данных'));
+      if (err.code === 11000) {
+        next(new Conflict('Пользователь с введенным Email уже существует'));
+      } else if (err.name === 'ValidationError') {
+        next(new BadRequest('Данные введены неверно'));
       } else {
-        next(new ServerError('Ошибка сервера'));
+        next(err);
       }
     });
 };
 
-const createUser = (req, res, next) => {
-  const {
-    name, email, password,
-  } = req.body;
-  User.findOne({ email }).then((user) => {
-    bcrypt.hash(password, 10)
-      .then((hash) => {
-        User.create({
-          name, email, password: hash,
-        })
-          .then((user) => {
-            res.status(200).send({
-              _id: user._id,
-              name: user.name,
-              email: user.email,
-            });
-          })
-          .catch((err) => {
-            if (err.name === 'ValidationError') {
-              next(new BadRequest('Некорректно переданы данные'));
-            }
-            next(new Conflict('Пользователь с таким email существует'));
-          });
-      })
-      .catch(() => {
-        next(new ServerError('Ошибка сервера'));
-      });
+// Обновление данных пользователя
+const updateUser = (req, res, next) => User.findByIdAndUpdate(req.user.payload._id, req.body,
+  { new: true, runValidators: true })
+  .orFail(() => {
+    throw new NotFoundError('Пользователь не найден');
   })
-    .catch(() => {
-      next(new ServerError('Ошибка сервера'));
-    });
-};
+  .then((user) => res.send(user))
+  .catch((err) => {
+    next(err);
+  })
+  .catch(next);
 
+// Функция логин
 const login = (req, res, next) => {
   const { email, password } = req.body;
   User.findOne({ email }).select('+password')
-    .then((user) => {
-      if (!user) {
-        next(new Unauthorized('Некорректный email или пароль.'));
+    .orFail(() => {
+      throw new Unauthorized('Неверно введен email или пароль');
+    })
+    .then((user) => ({
+      user,
+      isPasswordEqual: bcrypt.compareSync(password, user.password),
+    }))
+    .then(({ user, isPasswordEqual }) => {
+      if (!isPasswordEqual) {
+        throw new Unauthorized('Неверно введен email или пароль');
       }
-      return bcrypt.compare(password, user.password)
-        .then((mathed) => {
-          if (!mathed) {
-            next(new Unauthorized('Некорректный email или пароль.'));
-          } else {
-            return user;
-          }
-        });
+      const token = generateToken({ _id: user._id });
+      return res.send({ token });
     })
-    .then((user) => {
-      const token = jwt.sign({ _id: user._id }, NODE_ENV === 'production' ? JWT_SECRET : 'puding', { expiresIn: '7d' });
-      return res
-        .status(201)
-        .cookie('jwt', token, {
-          maxAge: 3600000 * 24 * 7,
-          httpOnly: true,
-          sameSite: 'none',
-          secure: true,
-        })
-        .send({ message: 'Авторизация пройдена!', token });
-    })
-    .catch((err) => {
-      next(new ServerError('Ошибка сервера'));
-    });
+    .catch(next);
 };
 
 module.exports = {
-  getUsersMe, updateUser, createUser, login,
+  getUser, updateUser, createUser, login,
 };

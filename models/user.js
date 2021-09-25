@@ -10,17 +10,17 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
+    unique: true,
     required: true,
-    unique: true, // проверка поля на уникальность
     validate: {
       validator: (email) => isEmail(email),
-      message: 'Указан неверный формат почты',
+      message: 'Неверный формат почты',
     },
   },
   password: {
     type: String,
-    required: true,
     minlength: 8,
+    required: true,
     select: false,
   },
 });
