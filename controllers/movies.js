@@ -30,7 +30,6 @@ const createMovie = (req, res, next) => {
     owner: req.user.payload._id,
   })
     .then((movie) => {
-      console.log(movie.owner);
       res.status(200).send(movie);
     })
     .catch((err) => {
