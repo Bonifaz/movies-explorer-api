@@ -5,12 +5,15 @@ const NotFoundError = require('../errors/NotFoundError');
 const Unauthorized = require('../errors/Unauthorized');
 const Conflict = require('../errors/Conflict');
 const { generateToken } = require('../utils/jwt');
+const {
+  NOTFOUNDMESSAGE, CONFLICTMESSAGE, BADREQUESTMESSAGE, UNAUTHORIZEDMESSAGE,
+} = require('../utils/constants');
 
 // Информация о себе
 const getUser = (req, res, next) => {
   User.findById(req.user.payload._id)
     .orFail(() => {
-      throw new NotFoundError('Пользователь не найден');
+      throw new NotFoundError(NOTFOUNDMESSAGE);
     })
     .then((user) => {
       res.status(200).send({
@@ -25,7 +28,7 @@ const getUser = (req, res, next) => {
 const createUser = (req, res, next) => {
   const data = req.body;
   if (!data.password) {
-    throw new BadRequest('Пароль не введен');
+    throw new BadRequest(BADREQUESTMESSAGE);
   }
   bcrypt.hash(req.body.password, 10)
     .then((hash) => User.create({
@@ -41,9 +44,9 @@ const createUser = (req, res, next) => {
     })
     .catch((err) => {
       if (err.code === 11000) {
-        next(new Conflict('Пользователь с введенным Email уже существует'));
+        next(new Conflict(CONFLICTMESSAGE));
       } else if (err.name === 'ValidationError') {
-        next(new BadRequest('Данные введены неверно'));
+        next(new BadRequest(BADREQUESTMESSAGE));
       } else {
         next(err);
       }
@@ -54,20 +57,28 @@ const createUser = (req, res, next) => {
 const updateUser = (req, res, next) => User.findByIdAndUpdate(req.user.payload._id, req.body,
   { new: true, runValidators: true })
   .orFail(() => {
-    throw new NotFoundError('Пользователь не найден');
+    throw new NotFoundError(NOTFOUNDMESSAGE);
   })
   .then((user) => res.send(user))
   .catch((err) => {
-    next(err);
+    if (err.code === 11000) {
+      next(new Conflict(CONFLICTMESSAGE));
+    } else if (err.name === 'ValidationError') {
+      next(new BadRequest(BADREQUESTMESSAGE));
+    } else {
+      next(err);
+    }
   })
-  .catch(next);
+  .catch((err) => {
+    next(err);
+  });
 
 // Функция логин
 const login = (req, res, next) => {
   const { email, password } = req.body;
   User.findOne({ email }).select('+password')
     .orFail(() => {
-      throw new Unauthorized('Неверно введен email или пароль');
+      throw new Unauthorized(UNAUTHORIZEDMESSAGE);
     })
     .then((user) => ({
       user,
@@ -75,7 +86,7 @@ const login = (req, res, next) => {
     }))
     .then(({ user, isPasswordEqual }) => {
       if (!isPasswordEqual) {
-        throw new Unauthorized('Неверно введен email или пароль');
+        throw new Unauthorized(UNAUTHORIZEDMESSAGE);
       }
       const token = generateToken({ _id: user._id });
       return res.send({ token });

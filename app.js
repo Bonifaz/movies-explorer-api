@@ -6,13 +6,13 @@ const helmet = require('helmet');
 const indexRouter = require('./routes/index');
 const { requestLogger, errorLogger } = require('./middlewares/logger');
 const limiter = require('./utils/rateLimit');
-const { PORTSERVER, ADRESS } = require('./utils/constants');
+const { PORTSERVER, ADRESS, NODE_ENV } = require('./utils/constants');
 const errorsHandler = require('./middlewares/errors');
 
 const app = express();
 const { PORT = PORTSERVER } = process.env;
-
-mongoose.connect(ADRESS, {
+const adressBD = NODE_ENV === 'production' ? ADRESS : 'mongodb://localhost:27017/bitfilmsdb';
+mongoose.connect(adressBD, {
   useUnifiedTopology: true,
   useNewUrlParser: true,
   useCreateIndex: true,
