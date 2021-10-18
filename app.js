@@ -22,7 +22,7 @@ mongoose.connect(adressBD, {
 app.options('*', cors());
 
 app.use(cors({
-  origin: ['http://elmovies.nomoredomains.monster', 'https://elmovies.nomoredomains.monster', 'http://localhost:3000', 'https://localhost:3000'],
+  origin: ['http://eldiplomafrontendo.nomoredomains.monster', 'https://eldiplomafrontendo.nomoredomains.monster', 'http://localhost:3000', 'https://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
